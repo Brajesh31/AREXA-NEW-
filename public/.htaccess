@@ -1,0 +1,92 @@
+# Arexa - Secure SPA Routing Configuration
+
+# 1. GLOBAL SECURITY: Disable Directory Browsing (Prevents hackers seeing file lists)
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # 2. SECURITY: Block Access to Hidden/Sensitive Files
+    # This blocks anyone from trying to access .env, .git, .htaccess, etc.
+    RewriteRule "(^|/)\." - [F]
+
+    # 3. SECURITY: Block PHP Execution in Uploads (Backup Rule)
+    # Prevents any PHP script from running inside uploads, even if accessed directly
+    RewriteRule ^uploads/.*\.php$ - [F,L]
+
+    # Force HTTPS (Uncomment if you have SSL installed)
+    # RewriteCond %{HTTPS} off
+    # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+    # Handle Authorization Header
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # SPA Routing - Handle client-side routing
+    # If the requested file exists (like an image or API script), serve it directly
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Otherwise, serve index.html for React routing
+    RewriteRule ^ index.html [L]
+</IfModule>
+
+# Cache static assets (Performance)
+<IfModule mod_expires.c>
+    ExpiresActive On
+
+    # Images
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/webp "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType image/x-icon "access plus 1 year"
+
+    # Video
+    ExpiresByType video/mp4 "access plus 1 year"
+    ExpiresByType video/webm "access plus 1 year"
+
+    # CSS & JavaScript
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType text/javascript "access plus 1 month"
+
+    # Fonts
+    ExpiresByType font/woff2 "access plus 1 year"
+    ExpiresByType font/woff "access plus 1 year"
+    ExpiresByType application/font-woff2 "access plus 1 year"
+    ExpiresByType application/font-woff "access plus 1 year"
+</IfModule>
+
+# Compression (Speed)
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css
+    AddOutputFilterByType DEFLATE application/javascript application/json
+    AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+# Security Headers (The Invisible Shield)
+<IfModule mod_headers.c>
+    # Block MIME Sniffing
+    Header set X-Content-Type-Options "nosniff"
+
+    # Prevent Clickjacking (Site cannot be embedded in iframes)
+    Header set X-Frame-Options "SAMEORIGIN"
+
+    # Cross-Site Scripting Protection
+    Header set X-XSS-Protection "1; mode=block"
+
+    # Privacy: Don't leak full URLs to other sites
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+
+    # Permissions: Disable unauthorized access to hardware (Mic/Cam)
+    Header set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+
+    # Force HTTPS Strict Transport Security (Uncomment if SSL is active)
+    # Header set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+</IfModule>
+
+# Custom Error Pages
+ErrorDocument 404 /index.html

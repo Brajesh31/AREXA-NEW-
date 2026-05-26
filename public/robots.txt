@@ -1,0 +1,30 @@
+# 1. Search Engine Bots (High Priority)
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+# 2. Social Media Bots (For Card Previews)
+User-agent: Twitterbot
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+
+# 3. Global Rules for All Other Bots
+User-agent: *
+Allow: /
+
+# 4. Critical SEO Directives
+# Essential for ranking images and understanding page layout (Mobile-First Indexing)
+Allow: /assets/
+Allow: /images/
+Allow: /src/
+
+# Prevent crawling of technical 404s or error pages
+Disallow: /404
+Disallow: /private/
+
+# 5. Sitemap Location
+Sitemap: https://arexa.co/sitemap.xml

@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Space Salvage (VR‑lite) — Three.js + Cannon‑es</title>
+  <style>
+    html, body { height: 100%; margin: 0; background: radial-gradient(1200px 800px at 50% 40%, #0d1b2a 0%, #05080f 60%, #03050a 100%); color: #e6e6e6; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    #app { position: fixed; inset: 0; overflow: hidden; }
+    canvas { display:block; }
+
+    /* HUD */
+    .hud { position: fixed; inset: 0; pointer-events: none; }
+    .panel { position: absolute; background: rgba(0,0,0,0.35); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 8px 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+    #statsPanel { top: 12px; left: 12px; font-size: 14px; line-height: 1.4; }
+    #hintPanel { bottom: 14px; left: 50%; transform: translateX(-50%); font-size: 14px; text-align: center; }
+    #centerReticle { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 10px; height: 10px; border: 2px solid #8fd3ff; border-radius: 50%; box-shadow: 0 0 12px #58b6ff; opacity: 0.9; }
+
+    #titleCard { position: absolute; inset: 0; display:flex; align-items:center; justify-content:center; background: linear-gradient(180deg, rgba(2,6,12,0.8), rgba(2,6,12,0.6)); backdrop-filter: blur(2px); }
+    #titleCard .card { pointer-events:auto; text-align:center; max-width: 680px; padding: 28px 28px 22px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.12); background: rgba(8,12,18,0.7); box-shadow: 0 12px 40px rgba(0,0,0,0.55); }
+    #titleCard h1 { margin: 0 0 4px; font-weight: 700; letter-spacing: 0.4px; font-size: clamp(20px, 3.2vw, 28px); }
+    #titleCard p { margin: 4px 0 12px; color: #bcd7ff; font-size: 14px; }
+    .btn { display:inline-block; padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.16); background: linear-gradient(180deg,#1d2a3a,#121a25); color:#e6f2ff; text-decoration:none; cursor:pointer; }
+    .btn:hover { filter: brightness(1.1); }
+    .btn:active { transform: translateY(1px); }
+
+    #winOverlay, #failOverlay { position: absolute; inset: 0; display:none; align-items:center; justify-content:center; background: rgba(0,0,0,0.6); }
+    #winOverlay .card, #failOverlay .card { pointer-events:auto; text-align:center; max-width: 560px; padding: 24px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.12); background: rgba(8,12,18,0.85); box-shadow: 0 12px 40px rgba(0,0,0,0.55); }
+
+    /* Mobile controls (very simple) */
+    #mobileControls { position: fixed; inset: 0; display:none; pointer-events:none; }
+    .stick { position:absolute; width: 120px; height: 120px; left: 14px; bottom: 14px; border-radius: 50%; border: 1px dashed rgba(255,255,255,0.25); pointer-events:auto; }
+    .stick::after { content:""; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width: 48px; height: 48px; border-radius:50%; background: rgba(143,211,255,0.35); border: 1px solid rgba(143,211,255,0.5); }
+    .btn-float { position:absolute; right: 16px; bottom: 14px; pointer-events:auto; }
+
+    @media (max-width: 900px) {
+      #mobileControls { display:block; }
+    }
+
+    /* Self‑test panel */
+    #testPanel { position: absolute; top: 12px; right: 12px; font-size: 12px; line-height: 1.4; }
+    #testPanel .ok { color: #7CFC7C; }
+    #testPanel .fail { color: #ff8a80; }
+  </style>
+
+  <!-- Import Map to resolve bare specifiers used by three.js addons -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <!-- HUD -->
+  <div class="hud">
+    <div id="centerReticle"></div>
+    <div id="statsPanel" class="panel">
+      <div><strong>Time:</strong> <span id="timeVal">0:00</span></div>
+      <div><strong>Parts:</strong> <span id="partsVal">0</span>/<span id="partsTotal">0</span></div>
+      <div><strong>Velocity:</strong> <span id="velVal">0</span> m/s</div>
+      <div><strong>Fuel:</strong> <span id="fuelVal">100</span>%</div>
+    </div>
+    <div id="hintPanel" class="panel">
+      <div id="hintText">Click to lock cursor • WASD move • Mouse look • Q/E roll • Shift boost • Space brake • Left‑click grab • Click again to attach</div>
+    </div>
+    <div id="titleCard">
+      <div class="card">
+        <h1>Space Salvage (VR‑lite)</h1>
+        <p>Thruster through zero‑G, tractor‑beam parts, and rebuild your ship. Desktop: click to lock cursor.</p>
+        <button id="startBtn" class="btn">Start Mission</button>
+      </div>
+    </div>
+    <div id="winOverlay"><div class="card"><h2>Ship Rebuilt!</h2><p id="winStats"></p><button id="retryWin" class="btn">Play Again</button></div></div>
+    <div id="failOverlay"><div class="card"><h2>Out of Fuel</h2><p>Rescue inbound… Try again?</p><button id="retryFail" class="btn">Retry</button></div></div>
+    <div id="testPanel" class="panel"><strong>Self‑tests</strong><div id="tests"></div></div>
+  </div>
+
+  <!-- Mobile (very basic) -->
+  <div id="mobileControls">
+    <div id="leftStick" class="stick"></div>
+    <div class="btn-float"><button id="brakeBtn" class="btn">Brake</button></div>
+  </div>
+
+  <script type="module">
+    // ===== Imports (via import map) =====
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+    import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
+
+    // ===== Constants (tuning) =====
+    const CONFIG = {
+      TARGET_PARTS: 10,
+      DEBRIS_COUNT: 55,
+      WORLD_SIZE: 220,
+      PLAYER: {
+        MAX_SPEED: 18,
+        BOOST_MULT: 1.8,
+        THRUST: 18,
+        DAMPING: 0.985,
+        ROLL_SPEED: 1.8,
+      },
+      PHYSICS: {
+        STEP: 1/120,
+        SPRING: { stiffness: 60, damping: 8, restLength: 2.2 },
+      },
+      BEAM: { RANGE: 6 },
+      SNAP: { DIST: 2.2 },
+      FUEL: { MAX: 100, DRAIN: 0.8, BOOST_DRAIN: 1.4, REFILL: 25 },
+    };
+
+    // ===== Globals =====
+    let scene, camera, renderer, controls, orbitDebug;
+    let world;
+    let playerBody, playerObj;
+    let held = null, spring = null; // held { mesh, body }
+    let raycaster, highlighted = null;
+    let shipFrame, mountPoints = [], occupiedMounts = new Set();
+    let debris = []; // { mesh, body, isPart, id }
+    let fuel = CONFIG.FUEL.MAX;
+    let startTime = 0, elapsed = 0, running = false, assembledCount = 0;
+    
+    // ===== Input / Movement =====
+    const keys = {};
+    let paused = false;
+    const mobileInput = { x: 0, y: 0 };
+
+    // ===== Ghost Preview (globals + helpers) =====
+    let ghostPreview = null; // THREE.Mesh clone shown near a mount while holding a part
+    const GHOST_PARAMS = { opacity: 0.35, color: 0x00ff9d };
+
+
+    let beamLine = null;
+
+    // ===== Loop =====
+    let accTime = 0;
+
+    // HUD elements
+    const timeVal = document.getElementById('timeVal');
+    const partsVal = document.getElementById('partsVal');
+    const partsTotal = document.getElementById('partsTotal');
+    const velVal = document.getElementById('velVal');
+    const fuelVal = document.getElementById('fuelVal');
+    const titleCard = document.getElementById('titleCard');
+    const startBtn = document.getElementById('startBtn');
+    const winOverlay = document.getElementById('winOverlay');
+    const failOverlay = document.getElementById('failOverlay');
+    const retryWin = document.getElementById('retryWin');
+    const retryFail = document.getElementById('retryFail');
+
+    function makeGhostFromMesh(srcMesh){
+      const geo = srcMesh.geometry.clone();
+      const mat = new THREE.MeshStandardMaterial({
+        color: GHOST_PARAMS.color,
+        transparent: true,
+        opacity: GHOST_PARAMS.opacity,
+        metalness: 0.2,
+        roughness: 0.7,
+        depthWrite: false
+      });
+      const ghost = new THREE.Mesh(geo, mat);
+      ghost.renderOrder = 999;
+      ghost.castShadow = false;
+      ghost.receiveShadow = false;
+      ghost.visible = false;
+      return ghost;
+    }
+
+    function ensureGhost(srcMesh){
+      if (!ghostPreview){
+        ghostPreview = makeGhostFromMesh(srcMesh);
+        scene.add(ghostPreview);
+      } else if (ghostPreview.geometry !== srcMesh.geometry){
+        ghostPreview.geometry.dispose();
+        ghostPreview.geometry = srcMesh.geometry.clone();
+      }
+      ghostPreview.material.color.setHex(GHOST_PARAMS.color);
+      ghostPreview.material.opacity = GHOST_PARAMS.opacity;
+      return ghostPreview;
+    }
+
+    function clearGhostPreview(){
+      if (ghostPreview){
+        ghostPreview.visible = false;
+      }
+    }
+
+    function updateGhostPreview(){
+      if (!running || !held){ clearGhostPreview(); return; }
+      const nearest = getNearestFreeMount(held.mesh.position);
+      if (!nearest){ clearGhostPreview(); return; }
+      const dist = nearest.position.distanceTo(held.mesh.position);
+      if (dist < (typeof CONFIG?.SNAP?.DIST === 'number' ? CONFIG.SNAP.DIST * 1.5 : 3)){
+        const g = ensureGhost(held.mesh);
+        g.position.copy(nearest.position);
+        g.quaternion.copy(held.mesh.quaternion); // preserve orientation preview
+        g.visible = true;
+      } else {
+        clearGhostPreview();
+      }
+    }
+
+    // ===== Init =====
+    initScene();
+    initPhysics();
+    spawnStars();
+    spawnShipFrame();
+    spawnDebris();
+    initUI();
+    runSelfTests();
+    animate();
+
+    // ===== Functions =====
+    function initScene(){
+      scene = new THREE.Scene();
+
+      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 2000);
+      camera.position.set(0, 2, 6);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.6));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      document.getElementById('app').appendChild(renderer.domElement);
+
+      // Lighting
+      const amb = new THREE.AmbientLight(0x607d8b, 0.6);
+      scene.add(amb);
+      const dir = new THREE.DirectionalLight(0xbcd7ff, 0.9);
+      dir.position.set(30, 40, 20);
+      dir.castShadow = true;
+      dir.shadow.mapSize.set(1024, 1024);
+      scene.add(dir);
+
+      // Controls
+      controls = new PointerLockControls(camera, document.body);
+      orbitDebug = new OrbitControls(camera, renderer.domElement); // debug only
+      orbitDebug.enabled = false;
+
+      raycaster = new THREE.Raycaster();
+
+      // Player visual root (for attaching helper gizmos)
+      playerObj = new THREE.Object3D();
+      scene.add(playerObj);
+
+      window.addEventListener('resize', onResize);
+      renderer.domElement.addEventListener('click', () => { if (running) controls.lock(); });
+    }
+
+    function initPhysics(){
+      world = new CANNON.World({ gravity: new CANNON.Vec3(0,0,0) });
+      world.broadphase = new CANNON.SAPBroadphase(world);
+      world.allowSleep = true;
+
+      // Player body (small sphere)
+      const shape = new CANNON.Sphere(0.8);
+      playerBody = new CANNON.Body({ mass: 5, shape });
+      playerBody.linearDamping = 0.01;
+      playerBody.angularDamping = 0.2;
+      playerBody.position.set(0, 0, 6);
+      world.addBody(playerBody);
+    }
+
+    function spawnStars(){
+      // Single shader-based stars dome
+      const geo = new THREE.SphereGeometry(1000, 32, 16);
+      const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide });
+      const stars = new THREE.Mesh(geo, mat);
+      stars.material.onBeforeCompile = (shader) => {
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <dithering_fragment>',
+          `#include <dithering_fragment>
+          vec2 uv = gl_FragCoord.xy / 1024.0;
+          float r = rand( uv * 300.0 );
+          float star = step(0.995, r);
+          gl_FragColor.rgb += star * 0.85;`
+        );
+      };
+
+      scene.add(stars);
+    }
+
+    function spawnShipFrame(){
+      const frame = new THREE.Group();
+      // Simple frame: ring + struts
+      const ringGeo = new THREE.TorusGeometry(3.2, 0.08, 12, 64);
+      const metal = new THREE.MeshStandardMaterial({ color: 0x9fb3c8, metalness: 0.75, roughness: 0.35 });
+      const ring = new THREE.Mesh(ringGeo, metal);
+      ring.castShadow = ring.receiveShadow = true;
+      frame.add(ring);
+
+      const strutGeo = new THREE.CylinderGeometry(0.06, 0.06, 3.4, 10);
+      for (let i=0;i<6;i++){
+        const s = new THREE.Mesh(strutGeo, metal);
+        s.position.set(Math.cos((i/6)*Math.PI*2)*1.6, 0, Math.sin((i/6)*Math.PI*2)*1.6);
+        s.rotation.z = Math.PI/2;
+        s.castShadow = s.receiveShadow = true;
+        frame.add(s);
+      }
+
+      // Mount points (types optional). We'll make 10 mounts around ring.
+      const mountMat = new THREE.MeshBasicMaterial({ color: 0x00ff9d });
+      const mountGeo = new THREE.SphereGeometry(0.08, 8, 8);
+      for (let i=0;i<CONFIG.TARGET_PARTS;i++){
+        const t = i/CONFIG.TARGET_PARTS * Math.PI * 2;
+        const m = new THREE.Mesh(mountGeo, mountMat);
+        m.position.set(Math.cos(t)*3.2, (i%2?0.6:-0.6), Math.sin(t)*3.2);
+        m.userData.mountId = i;
+        m.userData.occupied = false;
+        frame.add(m);
+        mountPoints.push(m);
+      }
+      frame.position.set(0,0,0);
+      scene.add(frame);
+      shipFrame = frame;
+    }
+
+    function randRange(min,max){ return Math.random()*(max-min)+min; }
+
+    function makePartMesh(){
+      const types = ['panel','pipe','crate','antenna','thruster'];
+      const type = types[Math.floor(Math.random()*types.length)];
+      let mesh;
+      const metal = new THREE.MeshStandardMaterial({ color: 0xb0bec5, metalness: 0.7, roughness: 0.45, emissive: 0x000000 });
+      switch(type){
+        case 'panel': mesh = new THREE.Mesh(new THREE.BoxGeometry(randRange(0.6,1.2), randRange(0.05,0.12), randRange(0.6,1.2)), metal); break;
+        case 'pipe': mesh = new THREE.Mesh(new THREE.CylinderGeometry(randRange(0.06,0.12), randRange(0.06,0.12), randRange(0.8,1.6), 10), metal); mesh.rotation.z = Math.random()*Math.PI; break;
+        case 'crate': mesh = new THREE.Mesh(new THREE.BoxGeometry(randRange(0.4,0.9), randRange(0.4,0.9), randRange(0.4,0.9)), metal); break;
+        case 'antenna': mesh = new THREE.Mesh(new THREE.ConeGeometry(randRange(0.1,0.2), randRange(0.8,1.4), 10), metal); break;
+        case 'thruster': mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.35, 0.6, 16, 1, true), metal); mesh.rotation.x = Math.PI/2; break;
+      }
+      mesh.castShadow = mesh.receiveShadow = true;
+      mesh.userData.isPart = true;
+      return mesh;
+    }
+
+    function spawnDebris(){
+      partsTotal.textContent = CONFIG.TARGET_PARTS;
+      const area = CONFIG.WORLD_SIZE;
+
+      // Create parts (count = TARGET_PARTS)
+      for (let i=0; i<CONFIG.TARGET_PARTS; i++){
+        const mesh = makePartMesh();
+        mesh.position.set(randRange(-area, area), randRange(-area, area), randRange(-area, area));
+        scene.add(mesh);
+
+        const shape = threeToCannonShape(mesh);
+        const body = new CANNON.Body({ mass: 2.5, shape });
+        body.position.copy(mesh.position);
+        body.velocity.set(randRange(-2,2), randRange(-2,2), randRange(-2,2));
+        body.angularVelocity.set(randRange(-1,1), randRange(-1,1), randRange(-1,1));
+        body.linearDamping = 0.002;
+        body.angularDamping = 0.001;
+        world.addBody(body);
+
+        debris.push({ mesh, body, isPart: true, id: `part_${i}` });
+      }
+
+      // Add generic debris
+      const debrisCount = CONFIG.DEBRIS_COUNT;
+      for (let i=0; i<debrisCount; i++){
+        const geom = Math.random() < 0.5 ? new THREE.BoxGeometry(randRange(0.2,1.0), randRange(0.2,1.0), randRange(0.2,1.0)) : new THREE.CylinderGeometry(randRange(0.05,0.2), randRange(0.05,0.2), randRange(0.4,1.4), 8);
+        const mat = new THREE.MeshStandardMaterial({ color: 0x607d8b, metalness: 0.6, roughness: 0.6 });
+        const mesh = new THREE.Mesh(geom, mat);
+        mesh.castShadow = mesh.receiveShadow = true;
+        mesh.position.set(randRange(-area, area), randRange(-area, area), randRange(-area, area));
+        scene.add(mesh);
+
+        const shape = threeToCannonShape(mesh);
+        const body = new CANNON.Body({ mass: 1.2, shape });
+        body.position.copy(mesh.position);
+        body.velocity.set(randRange(-1.5,1.5), randRange(-1.5,1.5), randRange(-1.5,1.5));
+        body.angularVelocity.set(randRange(-1,1), randRange(-1,1), randRange(-1,1));
+        body.linearDamping = 0.001;
+        world.addBody(body);
+
+        debris.push({ mesh, body, isPart: false, id: `debris_${i}` });
+      }
+    }
+
+    function threeToCannonShape(mesh){
+      mesh.updateMatrixWorld(true);
+      const bbox = new THREE.Box3().setFromObject(mesh);
+      const size = new THREE.Vector3();
+      bbox.getSize(size);
+      return new CANNON.Box(new CANNON.Vec3(Math.max(size.x*0.5,0.05), Math.max(size.y*0.5,0.05), Math.max(size.z*0.5,0.05)));
+    }
+
+    function initUI(){
+      startBtn.addEventListener('click', () => startGame());
+      retryWin.addEventListener('click', () => resetGame());
+      retryFail.addEventListener('click', () => resetGame());
+
+      // Inputs
+      window.addEventListener('keydown', onKey);
+      window.addEventListener('keyup', onKey);
+
+      // Mobile brake
+      document.getElementById('brakeBtn').addEventListener('click', () => quickBrake());
+
+      // Very simple left stick (translation only)
+      const stick = document.getElementById('leftStick');
+      let active = false, sx=0, sy=0;
+      stick.addEventListener('pointerdown', e => { active = true; sx=e.clientX; sy=e.clientY; stick.setPointerCapture(e.pointerId); });
+      stick.addEventListener('pointermove', e => { if(!active) return; const dx = e.clientX-sx; const dy = e.clientY-sy; mobileInput.x = THREE.MathUtils.clamp(dx/60,-1,1); mobileInput.y = THREE.MathUtils.clamp(dy/60,-1,1); });
+      stick.addEventListener('pointerup', e => { active=false; mobileInput.x=mobileInput.y=0; });
+
+      // Mouse for selection & grab
+      window.addEventListener('mousedown', (e)=>{
+        if (e.button === 0) { handleGrabOrAttach(); }
+      });
+    }
+
+    function startGame(){
+      running = true;
+      startTime = performance.now();
+      titleCard.style.display = 'none';
+      controls.lock();
+    }
+
+    function resetGame(){
+      window.location.reload();
+    }
+
+    function quickBrake(){
+      playerBody.velocity.scale(0, playerBody.velocity);
+      playerBody.angularVelocity.scale(0, playerBody.angularVelocity);
+    }
+
+    function onKey(e){
+      keys[e.code] = e.type === 'keydown';
+      if (e.code === 'KeyP' && e.type==='keydown') paused = !paused;
+      if (e.code === 'KeyO' && e.type==='keydown') orbitDebug.enabled = !orbitDebug.enabled;
+      if (e.code === 'Space' && e.type==='keydown') quickBrake();
+    }
+
+    function onResize(){
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function updateControls(dt){
+      // PointerLockControls gives orientation; we push in camera space
+      const dir = new THREE.Vector3();
+      const right = new THREE.Vector3();
+      const up = new THREE.Vector3(0,1,0);
+
+      camera.getWorldDirection(dir); // forward
+      right.crossVectors(dir, up).normalize();
+
+      let thrust = CONFIG.PLAYER.THRUST;
+      const boost = keys['ShiftLeft'] || keys['ShiftRight'];
+      if (boost) thrust *= CONFIG.PLAYER.BOOST_MULT;
+
+      // Input axes
+      let forward=0, strafe=0, rise=0;
+      forward += (keys['KeyW']||false) ? 1 : 0;
+      forward += (keys['KeyS']||false) ? -1 : 0;
+      strafe += (keys['KeyD']||false) ? 1 : 0;
+      strafe += (keys['KeyA']||false) ? -1 : 0;
+      rise   += (keys['KeyR']||false) ? 1 : 0; // optional up
+      rise   += (keys['KeyF']||false) ? -1 : 0; // optional down
+
+      // Mobile left stick -> forward/strafe
+      if (Math.hypot(mobileInput.x, mobileInput.y) > 0){
+        strafe += mobileInput.x;
+        forward += -mobileInput.y; // up is forward
+      }
+
+      const acc = new CANNON.Vec3(0,0,0);
+      if (forward!==0 || strafe!==0 || rise!==0){
+        // Fuel drain only when thrusting
+        const drain = (boost?CONFIG.FUEL.BOOST_DRAIN:CONFIG.FUEL.DRAIN) * dt * 60 * (Math.abs(forward)+Math.abs(strafe)+Math.abs(rise))/(1+boost*0.2);
+        fuel = Math.max(0, fuel - drain);
+        if (fuel <= 0){ forward=strafe=rise=0; }
+      }
+
+      const fwd = new CANNON.Vec3(dir.x, dir.y, dir.z);
+      const rgt = new CANNON.Vec3(right.x, right.y, right.z);
+      const upp = new CANNON.Vec3(0,1,0);
+
+      acc.vadd(fwd.scale(forward * thrust), acc);
+      acc.vadd(rgt.scale(strafe * thrust), acc);
+      acc.vadd(upp.scale(rise * thrust), acc);
+
+      // Apply acceleration -> velocity
+      playerBody.velocity.vadd(acc.scale(dt), playerBody.velocity);
+
+      // Clamp speed
+      const speed = playerBody.velocity.length();
+      const maxSpeed = CONFIG.PLAYER.MAX_SPEED * (boost?CONFIG.PLAYER.BOOST_MULT:1);
+      if (speed > maxSpeed){
+        playerBody.velocity.scale(maxSpeed/speed, playerBody.velocity);
+      }
+
+      // Roll (Q/E)
+      const roll = (keys['KeyQ']?1:0) - (keys['KeyE']?1:0);
+      if (roll !== 0){
+        const axis = dir.clone().normalize();
+        camera.rotateOnWorldAxis(axis, roll * CONFIG.PLAYER.ROLL_SPEED * dt);
+      }
+
+      // Damping
+      playerBody.velocity.scale(CONFIG.PLAYER.DAMPING, playerBody.velocity);
+
+      // Keep camera at player
+      camera.position.copy(playerBody.position);
+    }
+
+    // ===== Raycast / Interactions =====
+    function updateRaycast(){
+      // Cast from camera center
+      raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
+      const candidates = debris.filter(d=>d.isPart && (!held || d!==held));
+      const intersects = raycaster.intersectObjects(candidates.map(d=>d.mesh), false);
+
+      // Clear previous highlight
+      if (highlighted && (!intersects.length || intersects[0].object !== highlighted)){
+        clearHighlight(highlighted);
+        highlighted = null;
+      }
+
+      if (intersects.length){
+        const obj = intersects[0].object;
+        const d = obj.position.distanceTo(camera.position);
+        if (d < CONFIG.BEAM.RANGE){
+          if (highlighted !== obj){
+            setHighlight(obj, true);
+            highlighted = obj;
+          }
+        }
+      }
+    }
+
+    function setHighlight(mesh, on){
+      if (!mesh) return;
+      if (on){
+        mesh.userData._origEm = mesh.material.emissive?.getHex();
+        if (mesh.material.emissive){ mesh.material.emissive.setHex(0x1ec8ff); }
+        mesh.userData._pulse = true;
+      } else {
+        if (mesh.material.emissive && mesh.userData._origEm!==undefined){ mesh.material.emissive.setHex(mesh.userData._origEm); }
+        mesh.userData._pulse = false;
+      }
+    }
+
+    function handleGrabOrAttach(){
+      if (!running) return;
+      if (held){
+        // Try to snap to nearest free mount
+        const nearest = getNearestFreeMount(held.mesh.position);
+        if (nearest && nearest.position.distanceTo(held.mesh.position) < CONFIG.SNAP.DIST){
+          snapToMount(held, nearest);
+          held = null;
+          removeSpring();
+          return;
+        }
+        // else: drop
+        removeSpring();
+        held = null;
+        return;
+      }
+      // Grab new part if highlighted
+      if (highlighted){
+        const item = debris.find(d=>d.mesh===highlighted);
+        if (item){
+          held = item;
+          createSpringToPlayer(item.body);
+        }
+      }
+    }
+
+    function getNearestFreeMount(pos){
+      let best=null, bestD=1e9;
+      for (const m of mountPoints){
+        if (m.userData.occupied) continue;
+        const d = m.position.distanceTo(pos);
+        if (d < bestD){ bestD=d; best=m; }
+      }
+      return best;
+    }
+
+    function snapToMount(item, mount){
+      // Preserve the part's current rotation
+      item.body.type = CANNON.Body.STATIC;
+      item.body.velocity.set(0,0,0);
+      item.body.angularVelocity.set(0,0,0);
+      item.body.position.set(mount.position.x, mount.position.y, mount.position.z);
+      const preservedQuat = item.body.quaternion.clone();
+      item.body.quaternion.copy(preservedQuat);
+
+      item.mesh.position.copy(mount.position);
+      item.mesh.quaternion.copy(preservedQuat);
+
+      mount.userData.occupied = true;
+      occupiedMounts.add(mount.userData.mountId);
+      assembledCount++;
+      partsVal.textContent = assembledCount;
+
+      // Tiny attach spark
+      const spark = new THREE.Points(
+        new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array([0,0,0, 0.1,0,0, -0.1,0,0, 0,0.1,0, 0,-0.1,0]), 3)),
+        new THREE.PointsMaterial({ size: 0.06, color: 0x88ffcc })
+      );
+      spark.position.copy(mount.position);
+      scene.add(spark);
+      setTimeout(()=> scene.remove(spark), 250);
+
+      clearGhostPreview();
+      checkWin();
+    }
+
+    function createSpringToPlayer(body){
+      removeSpring();
+      spring = new CANNON.Spring(playerBody, body, CONFIG.PHYSICS.SPRING);
+      // Visual beam
+      if (!beamLine){
+        const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+        const mat = new THREE.LineBasicMaterial({ color: 0x58b6ff });
+        beamLine = new THREE.Line(geo, mat);
+        scene.add(beamLine);
+      }
+    }
+
+    function removeSpring(){
+      spring = null;
+      if (beamLine){ beamLine.visible = false; }
+    }
+
+    function animate(){
+      requestAnimationFrame(animate);
+      if (paused) return renderer.render(scene, camera);
+
+      const now = performance.now();
+      if (running) elapsed = (now - startTime) * 0.001;
+
+      const dt = 1/60; // fixed sim step for controls
+      updateControls(dt);
+      updateRaycast();
+      updateGhostPreview();
+
+      // Update spring each step (manual applyForce)
+      if (spring && held){
+        spring.applyForce();
+        // Update beam line
+        beamLine.visible = true;
+        const p1 = new THREE.Vector3(playerBody.position.x, playerBody.position.y, playerBody.position.z);
+        const p2 = new THREE.Vector3(held.body.position.x, held.body.position.y, held.body.position.z);
+        beamLine.geometry.setFromPoints([p1, p2]);
+      }
+
+      // Fixed-step physics
+      accTime += dt;
+      const h = CONFIG.PHYSICS.STEP;
+      while (accTime >= h){
+        world.step(h);
+        accTime -= h;
+      }
+
+      // Sync meshes to bodies
+      for (const d of debris){
+        d.mesh.position.copy(d.body.position);
+        d.mesh.quaternion.copy(d.body.quaternion);
+        // pulse highlight
+        if (d.mesh.userData._pulse){
+          const e = d.mesh.material.emissive; if (e){ e.setRGB(0.1+0.1*Math.sin(performance.now()*0.01), 0.8, 1.0); }
+        }
+      }
+
+      // HUD
+      updateHUD();
+
+      renderer.render(scene, camera);
+    }
+
+    function updateHUD(){
+      // Time
+      const m = Math.floor(elapsed/60);
+      const s = Math.floor(elapsed%60).toString().padStart(2,'0');
+      timeVal.textContent = `${m}:${s}`;
+      // Velocity
+      velVal.textContent = playerBody.velocity.length().toFixed(1);
+      // Fuel
+      fuelVal.textContent = Math.round(fuel);
+
+      if (fuel <= 0 && running){
+        running = false;
+        controls.unlock();
+        failOverlay.style.display = 'flex';
+      }
+    }
+
+    function checkWin(){
+      if (assembledCount >= CONFIG.TARGET_PARTS){
+        running = false;
+        controls.unlock();
+        winOverlay.style.display = 'flex';
+        document.getElementById('winStats').textContent = `Time: ${timeVal.textContent} • Final Speed: ${velVal.textContent} m/s`;
+      }
+    }
+
+    // ===== Utility =====
+    function clearHighlight(obj){ setHighlight(obj, false); }
+
+    // ===== Self Tests =====
+    function runSelfTests(){
+      const out = document.getElementById('tests');
+      const cases = [];
+      function pass(name){ cases.push(`<div class="ok">✓ ${name}</div>`); }
+      function fail(name, e){ cases.push(`<div class="fail">✗ ${name} — ${e?.message||e}</div>`); }
+
+      // Test 1: three import works
+      try { if (THREE && THREE.Color) pass('THREE imported'); else throw new Error('THREE undefined'); } catch(e){ fail('THREE imported', e); }
+
+      // Test 2: addons import works
+      try { if (OrbitControls && PointerLockControls) pass('Three addons imported'); else throw new Error('addons undefined'); } catch(e){ fail('Three addons imported', e); }
+
+      // Test 3: cannon world steps
+      try { const w = new CANNON.World(); w.step(1/60); pass('Cannon world step'); } catch(e){ fail('Cannon world step', e); }
+
+      // Test 4: basic raycast works
+      try {
+        const g = new THREE.BoxGeometry(1,1,1);
+        const m = new THREE.MeshBasicMaterial();
+        const cube = new THREE.Mesh(g,m);
+        scene.add(cube);
+        const rc = new THREE.Raycaster(new THREE.Vector3(0,0,5), new THREE.Vector3(0,0,-1));
+        const hits = rc.intersectObject(cube);
+        scene.remove(cube);
+        if (hits.length>0) pass('Raycaster hit'); else throw new Error('no hit');
+      } catch(e){ fail('Raycaster hit', e); }
+
+      // Test 5: snap preserves rotation
+      try {
+        const item = {
+          mesh: new THREE.Mesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshBasicMaterial()),
+          body: new CANNON.Body({ mass: 1, shape: new CANNON.Box(new CANNON.Vec3(0.5,0.5,0.5)) })
+        };
+        const eul = {x:0.3,y:0.6,z:1.0};
+        item.mesh.rotation.set(eul.x, eul.y, eul.z);
+        item.body.quaternion.setFromEuler(eul.x, eul.y, eul.z);
+        const mount = new THREE.Object3D();
+        mount.position.set(2,3,4);
+        mount.userData = { mountId: -1, occupied: false };
+
+        const qb = item.body.quaternion.clone();
+        const qm = item.mesh.quaternion.clone();
+
+        // simulate snap transform preserving rotation
+        item.body.type = CANNON.Body.STATIC;
+        item.body.position.set(mount.position.x, mount.position.y, mount.position.z);
+        item.mesh.position.copy(mount.position);
+
+        function quatAlmostEqual(a,b,eps=1e-3){
+          const dot = Math.abs(a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w);
+          return Math.abs(1 - dot) < eps;
+        }
+        if (!quatAlmostEqual(item.body.quaternion, qb)) throw new Error('body quaternion changed');
+        if (!quatAlmostEqual(item.mesh.quaternion, qm)) throw new Error('mesh quaternion changed');
+        pass('Snap preserves rotation');
+      } catch(e){ fail('Snap preserves rotation', e); }
+
+      out.innerHTML = cases.join('');
+    }
+  </script>
+</body>
+</html>
