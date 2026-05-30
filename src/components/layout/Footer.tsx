@@ -85,7 +85,6 @@ const Footer = () => {
       <footer className="bg-[#0A0D14] text-white border-t border-white/5 overflow-hidden font-sans">
 
         {/* --- 1. THE GRAND FINALE PRE-FOOTER CTA (FULL WIDTH) --- */}
-        {/* Adjusted py-10 md:py-16 to reduce bottom spacing specifically */}
         <div className="relative w-full border-b border-white/10 pt-10 pb-2 md:pt-16 md:pb-4 mb-10 md:mb-12 overflow-hidden">
           {/* Subtle Ambient Glows */}
           <div className="absolute top-1/2 left-0 -translate-y-1/2 w-[350px] h-[350px] bg-[#FF6B6B]/10 blur-[150px] rounded-full pointer-events-none" />
@@ -156,24 +155,24 @@ const Footer = () => {
               </motion.div>
             </div>
 
-            {/* CENTER: 3D Visual Graphic PlaceHolder (Height target reduced slightly) */}
+            {/* CENTER: 3D Visual Graphic PlaceHolder */}
             <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 whileInView={{ opacity: 1, scale: 1 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.8 }}
-                className="relative z-10 w-full max-w-[525px] lg:max-w-[739px] hidden lg:block flex-shrink-0 lg:-left-24 xl:-left-36"
+                className="relative z-0 w-full max-w-[560px] lg:max-w-[780px] hidden lg:block flex-shrink-0 lg:-left-24 xl:-left-36 self-end translate-y-2"
             >
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] bg-[#9F55FF]/25 blur-[70px] rounded-full pointer-events-none -z-10" />
               <img
                   src="/card12.png"
                   alt="Immersive Graphic"
-                  className="w-full h-[280px] lg:h-[400px] object-contain drop-shadow-[0_0_35px_rgba(159,85,255,0.25)] pointer-events-none"
+                  className="w-full h-[280px] lg:h-[400px] object-contain object-bottom scale-105 drop-shadow-[0_0_35px_rgba(159,85,255,0.25)] pointer-events-none"
               />
             </motion.div>
 
-            {/* RIGHT: High-Fidelity Individual Glass Cards */}
-            <div className="flex flex-col gap-4 flex-1 max-w-[390px] w-full mt-6 lg:mt-0 relative z-30 lg:-ml-28 lg:mr-0">
+            {/* RIGHT: High-Fidelity Individual Glass Cards (Shifted 20% left & layered up) */}
+            <div className="flex flex-col gap-4 flex-1 max-w-[390px] w-full mt-6 lg:mt-0 relative z-40 lg:-ml-[20%] lg:mr-0">
               {[
                 { icon: Clock, title: "Usually replies", subtitle: "within 24 hours" },
                 { icon: ShieldCheck, title: "NDA-friendly", subtitle: "collaboration" },

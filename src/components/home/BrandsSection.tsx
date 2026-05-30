@@ -40,8 +40,7 @@ const MarqueeRow = ({
                 delay: 0.15 + index * 0.1,
                 ease: "easeOut"
             }}
-            // Added hide-scrollbar class for standard CSS targeting
-            className="flex overflow-hidden touch-pan-y hide-scrollbar"
+            className="flex overflow-hidden touch-pan-y"
             style={{
                 maskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)',
                 WebkitMaskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)',
@@ -50,9 +49,8 @@ const MarqueeRow = ({
             }}
             aria-hidden="true"
         >
-            {/* Standard React style tag (Fixes the TS2322 jsx error) */}
-            <style>{`
-                .hide-scrollbar::-webkit-scrollbar {
+            <style jsx>{`
+                div::-webkit-scrollbar {
                     display: none;
                 }
             `}</style>
@@ -72,7 +70,7 @@ const MarqueeRow = ({
                         <img
                             src={brand.logo_url}
                             alt={`${brand.name} - Arexa Partner`}
-                            // Lightly saturated on desktop, full color on mobile & hover
+                            // MOBILE FIX: Full color on mobile. Muted on desktop (md:) with hover reveal.
                             className="w-full h-full object-contain pointer-events-none transition-all duration-500 saturate-100 opacity-100 md:saturate-50 md:opacity-60 md:group-hover:saturate-100 md:group-hover:opacity-100"
                             loading="lazy"
                             width="135"
